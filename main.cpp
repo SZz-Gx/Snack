@@ -161,12 +161,23 @@ public:
 
 int main()
 {
+    int highScore = 0;
+    std::ifstream inFile("highScore.txt");
+    if (inFile.is_open())
+    {
+        inFile >> highScore;
+        inFile.close();
+    }
+
+
     InitWindow(640, 480, "贪吃蛇");    // 1. 初始化窗口 (宽 800, 高 450, 标题)
     SetTargetFPS(60);    // 2. 设置帧率上限 (每秒30帧）
     bool restart = false;
 
     do
     {
+        int currentScore = 0;
+
         restart = false;
         Snake mySnake(32,24,BLUE);   //定蛇头的位置及颜色
 
@@ -212,6 +223,7 @@ int main()
                         gameOver = true;
                     } else if (isEating) {
                         // 如果吃到了，重新随机生成食物（确保不会刷在蛇身上，这里简略写）
+                        currentScore += 10;
                         bool valid = false;
                         while (!valid) {
                             foodPos.x = GetRandomValue(0, COLS - 1);
@@ -238,6 +250,19 @@ int main()
 
             // 如果游戏结束，覆盖一层文字
             if (gameOver) {
+                if (currentScore > highScore)
+                {
+                    highScore = currentScore;
+                    std::ofstream outFile("highScore.txt");
+                    if (outFile.is_open())
+                    {
+                        outFile << highScore;
+                        outFile.close();
+                    }
+                }
+
+                DrawText(TextFormat("Score: %d", currentScore),10,10,20,DARKGRAY);
+                DrawText(TextFormat("Best: %d", highScore),10,40,20,DARKGRAY);
                 DrawText("GAME OVER!", 220, 200, 40, RED);
                 DrawText("Press R to Restart", 200, 260, 20, DARKGRAY);
                 if (IsKeyPressed(KEY_R)) {
