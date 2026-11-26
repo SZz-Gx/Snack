@@ -3,6 +3,7 @@
 #include "raylib.h" //绘图
 #include <string>
 #include <fstream>
+#include "sqlite3.h"
 
 //常量设置
 const int CELL_SIZE = 10;   //每个格子的像素是10*10
@@ -159,6 +160,54 @@ public:
     }
 };
 
+// ===== SQLite：最高分持久化（新增功能，原 txt 读写保持不变）=====
+static const char* const SCORE_DB = "snack_scores.db";
+
+static sqlite3* openScoreDb()
+{
+    sqlite3* db = nullptr;
+    if (sqlite3_open(SCORE_DB, &db) != SQLITE_OK)
+    {
+        if (db) sqlite3_close(db);
+        return nullptr;
+    }
+    sqlite3_exec(db,
+                 "CREATE TABLE IF NOT EXISTS high_scores (id INTEGER PRIMARY KEY CHECK (id = 1), score INTEGER NOT NULL DEFAULT 0);"
+                 "INSERT OR IGNORE INTO high_scores (id, score) VALUES (1, 0);",
+                 nullptr, nullptr, nullptr);
+    return db;
+}
+
+static int loadScoreFromDb()
+{
+    sqlite3* db = openScoreDb();
+    if (!db) return 0;
+    int score = 0;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "SELECT score FROM high_scores WHERE id = 1;", -1, &stmt, nullptr) == SQLITE_OK
+        && sqlite3_step(stmt) == SQLITE_ROW)
+    {
+        score = sqlite3_column_int(stmt, 0);
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return score;
+}
+
+static void saveScoreToDb(int score)
+{
+    sqlite3* db = openScoreDb();
+    if (!db) return;
+    sqlite3_stmt* stmt = nullptr;
+    if (sqlite3_prepare_v2(db, "UPDATE high_scores SET score = ? WHERE id = 1;", -1, &stmt, nullptr) == SQLITE_OK)
+    {
+        sqlite3_bind_int(stmt, 1, score);
+        sqlite3_step(stmt);
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+}
+
 int main()
 {
     int highScore = 0;
@@ -169,6 +218,9 @@ int main()
         inFile.close();
     }
 
+    // 新增：SQLite 里的最高分也读出来，两者取较大值（原 txt 逻辑不变）
+    int dbHighScore = loadScoreFromDb();
+    if (dbHighScore > highScore) highScore = dbHighScore;
 
     InitWindow(640, 480, "贪吃蛇");    // 1. 初始化窗口 (宽 800, 高 450, 标题)
     SetTargetFPS(60);    // 2. 设置帧率上限 (每秒30帧）
@@ -259,6 +311,7 @@ int main()
                         outFile << highScore;
                         outFile.close();
                     }
+                    saveScoreToDb(highScore);   // 新增：同步写入 SQLite
                 }
 
                 DrawText(TextFormat("Score: %d", currentScore),10,10,20,DARKGRAY);
